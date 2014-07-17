@@ -1,0 +1,386 @@
+Agent Architecture
+／／agent架构
+Jump to: navigation, search
+
+During typical usage of the Simple Network Management Protocol (SNMP), the software that handles SNMP requests on a network node is called an agent. The Net-SNMP agent (snmpd) is responsible for handling incoming requests passed to it from the Net-SNMP library's transport and processing layers. This page describes how the agent works internally. If you're interested in implementing a MIB written in C-code for the Net-SNMP agent, this page is a good place to start. A good next step after reading this page is the TUT:Writing a MIB Module page.
+
+在是标准SNMP协议的时候，软件处理agent调用网络节点snmp请求，net－snmp agent响应处理从net－snmp库转换给他的请求，本页面描述agent的内部是怎样的。假如你对用c代码为net－snmp的agent实现一个mib库感兴趣，本也将是一个很好的开始，下一步应该去读这个页面：TUT:Writing a MIB Module page
+此页面连接：www.net-snmp.org/wiki/index.php/TUT:Writing_a_MIB_Module
+
+Contents
+
+    1 Agent Code Structure
+    2 Startup
+        2.1 MIB Module Registration
+        2.2 Registry API
+            2.2.1 The Where: netsnmp_handler_registration
+            2.2.2 The What: A Handler Definition
+            2.2.3 Registering the Resulting Handler
+    3 Handler Chains
+        3.1 Agent Startup and Registration
+        3.2 Handler Types
+    4 Request Processing
+        4.1 Calling the Handler
+        4.2 Calling sub-handlers
+        4.3 Injectable Run-Time Handlers
+    5 Passing Information Between Handlers
+        5.1 Adding Information
+        5.2 Retrieving the Data Later
+        5.3 Agent Data
+    6 Multi-tasking
+    7 Shutting Down
+内容：
+	1。agent 代码架构
+	2。启动
+		2。1 mib模块注册
+		2。2 注册api
+			2。2。1 netsnmp_handler_registration的位置
+			2。2。2 一个默认的处理是怎么样运行的
+			2。2。3 注册的执行结果
+	3。处理链条
+		3。1 agent启动和注册
+		3。2 处理函数属性
+	4。请求处理
+		4。1 调用处理函数
+		4。2 调用子处理函数
+		4。3 添加处理函数运行时间
+	5。在处理函数之间传递信息
+		5。1 添加信息
+		5。2 恢复迟来的数据
+		5。3 agent数据
+	6。多任务分配
+	7。关闭
+
+Agent Code Structure
+agent 代码架构
+
+The agent is made up of many pieces. These pieces include parts from multiple libraries and different parts of the agent itself. It usually interacts with libraries, the network, plugins, other processes, the file system, the local OS, and the local OS's kernel.
+
+这个agent是由很多部分组成的，
+
+
+It's code is contained in the agent/ sub-directory of the main source tree, and the main() function can be found in agent/snmpd.c.
+Agent-architecture.png
+Startup
+
+Upon starting, the agent goes through the following steps (in SnmpDaemonMain()):
+
+    reads command line options
+    decides whether it's a master or subagent
+    calls init_agent()
+        initializes the mib-module registration tree
+        registers its own configuration file tokens and callbacks
+        initializes the Agent Helpers 
+    initializes all the compiled-in mib modules
+    initializes the base libnetsnmp library
+    opens all the required ports to listen on
+    forks
+    saves persistent data (it's likely at least something has changed already)
+    sends a coldStart trap
+    invokes receive() to perform the main packet handling 
+
+MIB Module Registration
+
+MIB modules, which are responsible for implementing portions of the MIB tree, have the opportunity to register callbacks for any portion of the MIB tree when they are initialized. Registrations can functionally come from any of the following sources:
+
+    directly compiled in code
+    dynamically loaded shared objects
+    subagents (through one of the AgentX or SMUX protocols)
+    configuration files
+        Proxies
+        Embedded Perl code 
+
+Registry API
+
+MIB Modules register themselves by defining two things
+
+    a netsnmp_handler_registration structure containing "where" in the OID tree to register the MIB
+    a netsnmp_mib_handler structure indicating "what" code is registering to handle the requests 
+
+The name "handler" is exactly what it sounds like: it is a mechanism that "handles a request". The term is used frequently throughout the API.
+The Where: netsnmp_handler_registration
+
+The netsnmp_handler_registration structure looks like following:
+
+ typedef struct netsnmp_handler_registration_s {
+ 
+         /** for mrTable listings, and other uses */
+         char           *handlerName;
+         /** NULL = default context */
+         char           *contextName;    
+ 
+         /**
+          * where are we registered at? 
+          */
+         oid            *rootoid;
+         size_t          rootoid_len;
+ 
+         /**
+          * handler details 
+          */
+         netsnmp_mib_handler *handler;
+         int             modes;
+ 
+         /**
+          * more optional stuff 
+          */
+         int             priority;
+         int             range_subid;
+         oid             range_ubound;
+         int             timeout;
+         int             global_cacheid;
+ 
+         /**
+          * void ptr for registeree
+          */
+         void *          my_reg_void;
+ 
+ } netsnmp_handler_registration;
+
+The most important parts of this structure are:
+
+    the "handlerName" of the location in the OID tree.
+        it should be a unique case-sensitive name.
+        the reasons for needing it will be understood later, but it's best to name it after the MIB objects it will be referencing, for example "mySuperMibTable". 
+    the OID that the handler is registering to handle
+    a handler definition that indicates what code will actually handle something registered at this point in the OID tree. 
+
+The What: A Handler Definition
+
+Now that we know where something needs to be registered, we needs to indicate what will actually handle the request. Information about the handler is stored in a struct, netsnmp_mib_handler, which indicates the handler. It can store extra handler information and holds the handler access_method. The access_method is a pointer to the procedure that will actually fulfill and processes the SNMP requests for the registered OID location. For simple MIB handling, the access_method procedure is what the MIB coder will have to fill-in or write in order to handle the MIB requests. This is often done on a access_method per MIB table basis. The struct netsnmp_mib_handler definition follows:
+
+ typedef struct netsnmp_mib_handler_s {
+         char           *handler_name;
+         /** for handler's internal use */
+         void           *myvoid; 
+         /** for agent_handler's internal use */
+         int             flags;
+ 
+         /** if you add more members, you probably also want to update */
+         /** _clone_handler in agent_handler.c. */
+         
+         int             (*access_method) (struct netsnmp_mib_handler_s *,
+                                           struct netsnmp_handler_registration_s *,
+                                           struct netsnmp_agent_request_info_s *,
+                                           struct netsnmp_request_info_s *);
+         /** data clone hook for myvoid
+          *  deep copy the myvoid member - default is to copy the pointer
+          *  This method is only called if myvoid != NULL
+          *  myvoid is the current myvoid pointer.
+          *  returns NULL on failure
+          */
+         void *(*data_clone)(void *myvoid);
+         
+         /** data free hook for myvoid
+          *  delete the myvoid member - default is to do nothing
+          *  This method is only called if myvoid != NULL
+          */
+         void (*data_free)(void *myvoid); /**< data free hook for myvoid */
+ 
+         struct netsnmp_mib_handler_s *next;
+         struct netsnmp_mib_handler_s *prev;
+ } netsnmp_mib_handler;
+
+This contains some important features that need to be set before registering:
+
+    this too needs a name that should describe what the handler does, e.g. "mySuperCoolTableHandler"
+    it will contain the access_method function pointer to the code that actually will handle any MIB requests 
+
+Registering the Resulting Handler
+
+Once populated with the proper data, it needs to be registered with the agent. This can be done, at the most basic level, through the following API call:
+
+ netsnmp_register_handler(netsnmp_handler_registration *reginfo);
+
+The reginfo structure (the where) will contain a pointer to the handler to serve it (the what).
+Handler Chains
+
+Actually, most handler implementations aren't "singular". That is, they break the processing up into several steps and the resulting code is actually chained together in a serious of function calls, ending in the lowest-level handler's code. For example, there are helpers which are handlers that are designed to "sit in the middle" of a request and do some processing before the request gets to the lower level. This is useful if some of the code is so common that it's silly to implement the same code in a zillion low level handlers. For example, the most common problems are separating indexes and the column from a table's OID, caching data from slow operations, and sorting data into a standard SNMP order. So in the end, simple MIB objects (e.g. scalars) will likely have few steps in the handler chain, but complex MIB objects (e.g. tables) may have many handlers in the middle to "help out along the way".
+
+Most of these "middle-class" handlers will have their own registration functions that properly take the lower level's registration object and add themselves to the chain, and then call something higher up to complete the registration. We refer to this process as "injection". I.e., a registration function typically "injects" its own handler into the chain.
+
+netsnmp_register_handler() is actually the most basic of APIs that mostly says "I'll do everything from here, thanks".
+Agent Startup and Registration
+
+Because of this, the real flow of events in most MIB module code during start up looks like this:
+Error creating thumbnail: Unable to save thumbnail to destination
+
+During start up:
+
+    the agent calls each low-level module to initialize itself
+    each module then calls a registration function, such as register_table_iterator()
+    which then will inject itself into the chain, and then call a higher registration function, such as register_table()
+    eventually this will reach the core agent's netsnmp_register_handler 
+
+Handler Types
+
+Generally handlers fall into a few different categories:
+
+    handle processing the actual data
+    provide "help" to the data handlers
+        table helpers
+        scalar helpers
+        other helpers 
+    debugging assistants
+        debug
+        read_only 
+    caching and optimization handlers
+    backwards compatibility helpers
+        old_api: allows the original 'UCD' and 'CMU' code to continue working 
+
+For a full list of the helpers supplied by the Net-SNMP agent library, see Agent Helpers
+Request Processing
+
+The agent gets handed packets from the main Net-SNMP libraries packet-processing system, which receives and decodes any packets that arrive through the opened transports. Each PDU that arrives from the network is broken down into parts based on which registered module indicated it can respond to a particular OID sub-request. For example, if the incoming PDU was a GET request for two different OIDS, "sysUpTime.0" and "hrSystemUptime.0", it will analyze the PDU and determine that two different MIB modules are available, one that handles the OID for "sysUpTime.0" and one that handles the OID for "hrSystemUptime.0". It will then send sub-requests to each of those those modules for the respective OID.
+
+So the agent will construct multiple internal netsnmp_request_info structures and pass them each to the appropriate registered MIB handler. The netsnmp_request_info structure looks like this:
+
+   typedef struct netsnmp_request_info_s {
+      /**
+       * variable bindings
+       */
+       netsnmp_variable_list *requestvb;
+
+      /**
+       * can be used to pass information on a per-request basis from a
+       * helper to the later handlers 
+       */
+       netsnmp_data_list *parent_data;
+ 
+      /*
+       * pointer to the agent_request_info for this request
+       */
+       struct netsnmp_agent_request_info_s *agent_req_info;
+
+      /** don't free, reference to (struct tree)->end */
+       oid            *range_end;
+       size_t          range_end_len;
+
+      /*
+       * flags
+       */
+       int             delegated;
+       int             processed;
+       int             inclusive;
+
+       int             status;
+      /** index in original pdu */
+       int             index;
+ 
+      /** get-bulk */
+       int             repeat;
+       int             orig_repeat;
+       netsnmp_variable_list *requestvb_start;
+
+      /* internal use */
+       struct netsnmp_request_info_s *next;
+       struct netsnmp_request_info_s *prev;
+       struct netsnmp_subtree_s      *subtree;
+   } netsnmp_request_info;
+
+The important parts are highlighted in red. The first important item is the varbind, type netsnmp_variable_list, that the request will process. The second is a link to any other requests that are all being handed to the module's code. It's very possible that one module may need to respond to multiple requests, and the agent bundles them all together in a linked list (although there are helpers that can split the list up for you if you'd prefer).
+Calling the Handler
+
+Each handler is called using the following API:
+
+ int
+ my_super_cool_table_handler(
+     netsnmp_mib_handler          *handler,    // handler stack ptr
+     netsnmp_handler_registration *reginfo,    // returned reg ptr
+     netsnmp_agent_request_info   *reqinfo,    // request & PDU info
+     netsnmp_request_info         *requests    // requests to handle
+ )
+
+The function is passed everything it needs (and more) to handle the requests:
+
+    a pointer to the handler definition itself (allowing function reuse)
+    a pointer to the registration information that it's being called to act on
+    a handler to the global agent request information state
+    a pointer to linked-list of requests that need to be processed 
+
+Calling sub-handlers
+
+If you're implementing a handle that will sit in the middle (or even if you aren't, this is still good practice), you should process any data that needs processing and then call the lower-level handlers. This is easiest to do using the netsnmp_call_next_handler function, passing it the exact same set of arguments.
+
+       /*
+        * call the next handler 
+        */
+       ret = netsnmp_call_next_handler(handler, reginfo, reqinfo, request);
+
+If this returns a failure case (ie, anything other than SNMP_ERR_NOERROR), you should return that to your parent.
+Injectable Run-Time Handlers
+
+One nice artifact of having everything named is that you can "inject" some handlers at runtime. Some specific handlers have been created that allow you to dynamically insert them when the agent starts up to do "special things". For example, this snmpd.conf configuration file snippet:
+
+ injectHandler debug mySuperCoolTable
+
+will insert the debug handler into the handler chain for the mySuperCoolTable handler. The debug handler simply prints extra debugging information out into the agent's log files when Debugging output is turned on (turn on the debug token "helper:debug" to see the output).
+Passing Information Between Handlers
+
+Because there can be any number of handler's in a handler chain and each handler has it's own set of data, Net-SNMP has a mechanism for passing information from one handler in the chain to another one either lower or higher in the chain.
+Adding Information
+
+In order to add new information into a request that can be extracted later, you create a memory pointer that contains the information and add it into the request using the netsnmp_request_add_list_data() function. This function takes a callback to a function that knows how to free the data once the request is done processing.
+
+ struct my_data {
+   char *something;
+ };
+
+ void free_my_data(void *data) {
+   /* cast the void pointer into a structure we know about */
+   struct my_data *mydata = (struct my_data *) data;
+
+   /* free the data; SNMP_FREE will check for a NULL (can't be freed) */
+   SNMP_FREE(mydata->something);
+ }
+
+ int
+ my_handler(netsnmp_mib_handler *handler,
+            netsnmp_handler_registration *reginfo,
+            netsnmp_agent_request_info *reqinfo,
+            netsnmp_request_info *requests) {
+    struct my_data *mydata = SNMP_MALLOC_STRUCT(my_data);
+    mydata->something = strdup("remember me");
+    
+    /* ... */
+    
+    netsnmp_request_add_list_data(request,
+                                  netsnmp_create_data_list
+                                  ("my stash name",
+                                   (void *) mydata,
+                                   free_my_data));
+
+    /* ... */
+ };
+
+Retrieving the Data Later
+
+The data can then be retrieved later. This data might be accessed by a lower handler, a higher handler, or the same handler that created it. As an example, it could be data used during the multiple phases of SET processing:
+
+   struct my_data *mydata;
+   mydata = (struct my_data *) 
+         netsnmp_request_get_list_data(reqinfo, "my stash name");
+
+Then the cached data is available for use!
+Agent Data
+
+Besides storing information, per request, you can also store information for a complete set of requests. I.e., if you need to store a single piece of information regardless of whether it's for a single request or a huge number (think a 1,000 OID GET), you can use the _agent_ version of the APIs instead:
+
+  netsnmp_agent_add_list_data(reqinfo, ...);
+  netsnmp_agent_get_list_data(reqinfo, ...);
+
+Multi-tasking
+
+Some requests can be processed in parallel. Although the Net-SNMP agent is not thread-safe, it is capable of performing some tasks in parallel. In particular, if a MIB module implementation indicates to the main agent that it's "not yet done; please ask again later", the agent will continue to receive packets and process them if it is safe to do so. Typically, the MIB modules that support this delegated support are waiting for data to be returned from another network, file handle or other socket.
+
+It is not safe to process every type of request in parallel though. In particular:
+
+    PDUs safely parallel processed:
+        GET
+        GETNEXT
+        GETBULK 
+    PDUs which must be processed serially:
+        SET 
+
+For SNMP SETs, the agent finishes all outstanding requests and then acts on the SETs that have arrived before continuing on to any other requests in the queue.
+Shutting Down 

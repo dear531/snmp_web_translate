@@ -1,0 +1,34 @@
+TUT:Simple Application
+简单的应用：
+Jump to: navigation, search
+
+Here we discuss how to write a simple application. It's only purpose is to retrieve the value of a variable from a remote host.
+这里我们讨论怎样些一个简单的应用。他只想获取远程服务器的一个值。
+
+
+Here are the files discussed in this example so you can download them:
+File 	Description
+Makefile 			A simple makefile used to build the projects 一个简单的make文件，用于生成我们的工程
+NET-SNMP-TUTORIAL-MIB.txt 	The MIB we'll be writing code for in the various pieces of the agent extension tutorial 这是mib库，我们将为各种agent的扩展的教程写代码。
+snmpdemoapp.c 			The C source code 这是C代码。
+
+First, we must include some header files. After you've installed the net-snmp toolkit, some easy to use header files have been installed that handle most situations you'll run into. We start our snmpdemoapp.c file with these:
+首先我们必须包含更多的头文件，之后我们我们要安装net－snmp的工具包，
+ #include <net-snmp/net-snmp-config.h>
+ #include <net-snmp/net-snmp-includes.h>
+
+
+Next, we'll set up some local definitions that you can toggle if you want to use SNMPv3 or SNMPv1. By default, we're setting up for SNMPv3 here (which is more complex, so make sure you've read about the SNMPv3 Options first. If you don't want to deal with SNMPv3 for now, turn the #define statement below to #undef.
+
+ /* change the word "define" to "undef" to try the (insecure) SNMPv1 version */
+ #define DEMO_USE_SNMP_VERSION_3
+ 
+ #ifdef DEMO_USE_SNMP_VERSION_3
+ #include "net-snmp/transform_oids.h"
+ const char *our_v3_passphrase = "The Net-SNMP Demo Password";
+ #endif
+
+
+Next, we declare our main() routine and the variables we need:
+
+
