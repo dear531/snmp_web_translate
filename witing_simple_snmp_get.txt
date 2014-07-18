@@ -13,12 +13,13 @@ NET-SNMP-TUTORIAL-MIB.txt 	The MIB we'll be writing code for in the various piec
 snmpdemoapp.c 			The C source code 这是C代码。
 
 First, we must include some header files. After you've installed the net-snmp toolkit, some easy to use header files have been installed that handle most situations you'll run into. We start our snmpdemoapp.c file with these:
-首先我们必须包含更多的头文件，之后我们我们要安装net－snmp的工具包，
+首先我们必须包含更多的头文件，之后我们我们要安装net－snmp的工具包，更多的时候将使用头文件进行函数的操作，我们将用以下两个头文件开始。
  #include <net-snmp/net-snmp-config.h>
  #include <net-snmp/net-snmp-includes.h>
 
 
 Next, we'll set up some local definitions that you can toggle if you want to use SNMPv3 or SNMPv1. By default, we're setting up for SNMPv3 here (which is more complex, so make sure you've read about the SNMPv3 Options first. If you don't want to deal with SNMPv3 for now, turn the #define statement below to #undef.
+下面我们启动更多本地定义的选择使用版本3和版本1的开关。默认方式，我们使用版本3。那个是很多的综合，这样做首先你要群信你阅读过关于版本三的选项，假如你现在不知道怎么处理snmpv3，那么请将下面#define的声明改为#undef。
 
  /* change the word "define" to "undef" to try the (insecure) SNMPv1 version */
  #define DEMO_USE_SNMP_VERSION_3
@@ -30,5 +31,103 @@ Next, we'll set up some local definitions that you can toggle if you want to use
 
 
 Next, we declare our main() routine and the variables we need:
+再接下来，我们声明我们的mian函数，开始处理流程和我们需要的值。
+
+
+ main() {
+
+
+The first variables we need to declare:
+
+    struct snmp_session: A structure that holds information about who we're going to be talking to. We need to declare 2 of these, one to fill with information, and second which is a pointer returned by the library. 
+
+    struct snmp_pdu: This structure will hold all of the information that we're going to send to the remote host. We'll declare a second for the information that they are going to send back. 
+
+    oid: An OID is going to hold the location of the information which we want to retrieve. It'll need a size as well. 
+
+    struct variable_list: This will hold the variables that we want to manipulate via SNMP. 
+首先这些变量需要声明：
+	struct snmp_session：一个保持会话信息的结构体，我们需要声明两处，一个是填充信息，另一个是库函数返回的指针。
+	struct snmp_pdu:这个结构体是保存所有发送给远程主机信息的，我们将第二个声明，为稍后的信息发送。
+	oid: 一个保存本地取回的信息的，他需要很大的空间。
+	struct variable_list:这个变量，我们通过snmp保存这个变量。
+
+   struct snmp_session session, *ss;
+   struct snmp_pdu *pdu;
+   struct snmp_pdu *response;
+           
+   oid anOID[MAX_OID_LEN];
+   size_t anOID_len = MAX_OID_LEN;
+   
+   struct variable_list *vars;
+   int status;
+   
+Then, the first thing we must do is to inialize the snmp library: 
+那么，我们首先要初始化一个snmp库。
+   /*
+    * Initialize the SNMP library
+    */
+   init_snmp("snmpapp");
+   
+Next, we'll inialize a session that describes who we want to talk to, what version of SNMP we want to use, how to authenticate to it, etc. A full definition of this session can be found in the net-snmp/snmp_api.h header file.
+
+We've picked SNMPv3 by default above, which is a bit more complex to understand so make sure you've read 
+接下来，我们初始化一个会话描述连接，我们将使用哪个版本，怎样去识别他，等等。这些全部会话的定义在net－snmp／snmp_api.h头文件里。
+我们将选择上文默认，那个有些复杂的，确信你的读过的。
+
+    /*
+    * Initialize a "session" that defines who we're going to talk to
+    */
+   snmp_sess_init( &session );                   /* set up defaults */
+   session.peername = "test.net-snmp.org";
+   
+   /* set up the authentication parameters for talking to the server */
+   
+   #ifdef DEMO_USE_SNMP_VERSION_3
+   
+   /* Use SNMPv3 to talk to the experimental server */
+   
+   /* set the SNMP version number */
+   session.version=SNMP_VERSION_3;
+        
+   /* set the SNMPv3 user name */
+   session.securityName = strdup("MD5User");
+   session.securityNameLen = strlen(session.securityName);
+   
+   /* set the security level to authenticated, but not encrypted */
+   session.securityLevel = SNMP_SEC_LEVEL_AUTHNOPRIV;
+   
+   /* set the authentication method to MD5 */
+   session.securityAuthProto = usmHMACMD5AuthProtocol;
+   session.securityAuthProtoLen = sizeof(usmHMACMD5AuthProtocol)/sizeof(oid);
+   session.securityAuthKeyLen = USM_AUTH_KU_LEN;
+    
+   /* set the authentication key to a MD5 hashed version of our
+      passphrase "The Net-SNMP Demo Password" (which must be at least 8
+      characters long) */
+   if (generate_Ku(session.securityAuthProto,
+                   session.securityAuthProtoLen,
+                   (u_char *) our_v3_passphrase, strlen(our_v3_passphrase),
+                   session.securityAuthKey,
+                   &session.securityAuthKeyLen) != SNMPERR_SUCCESS) {
+       snmp_perror(argv[0]);
+       snmp_log(LOG_ERR,
+                "Error generating Ku from authentication pass phrase. \n");
+       exit(1);
+   }
+   
+   #else /* we'll use the insecure (but simplier) SNMPv1 */
+   
+   /* set the SNMP version number */
+   session.version = SNMP_VERSION_1;
+   
+   /* set the SNMPv1 community name used for authentication */
+   session.community = "demopublic";
+   session.community_len = strlen(session.community);
+   
+   #endif /* SNMPv1 */
+
+
+
 
 
