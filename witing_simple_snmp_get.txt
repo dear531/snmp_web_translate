@@ -128,6 +128,48 @@ We've picked SNMPv3 by default above, which is a bit more complex to understand 
    #endif /* SNMPv1 */
 
 
+After we have established the session, we then need to open it. Opening it returns a pointer to another session that we should use for all our future calls:
+在建立session之后，我们需要打开他，为了我们以后调用应该的使用的另一个session打开他。
+
+   /* windows32 specific initialization (is a noop on unix) */
+   SOCK_STARTUP;
+   
+   /*
+    * Open the session
+    */
+   ss = snmp_open(&session);                     /* establish the session */
+
+If the session failed to open properly, print an error message and exit:
+假如这个session打开失败，打印一个错误信息并退出。
+
+   if (!ss) {
+       snmp_perror("ack");
+       snmp_log(LOG_ERR, "something horrible happened!!!\n");
+       exit(2);
+   }
+
+Next we create the PDU the we are going to send to the remote host when we request information. In this case, we're going to create a SNMP-GET pdu, which is what the snmpget program uses, for instance. It retrieves a value for each oid that you initalize it with. 
+接下来我们创建一个向远程主机发送请求信息的PDU，既然这样，我们创建一个在实例多次被snmpget程序使用的snmp－get的pdu，他为每一个你他初始化的oid的值。
+
+   /*
+    * Create the PDU for the data for our request.
+    *   1) We're going to GET the system.sysDescr.0 node.
+    */
+   pdu = snmp_pdu_create(SNMP_MSG_GET);
+
+So, let's fill it with our requested oid. Let's get the system.sysDescr.0 variable for this example. There are numerious ways you could create the oid in question. You could put in the numerical unsigned integer values yourself into the anOID array we created above, or you could use one of the following function calls to do it. We recommend the first one (get_node), as it is the most powerful and accepts more types of OIDs. 
+那么，让我们的oid请求填充他，获得例子system.sysDescr.0的值，很多的方法可以创建oid的询问，你可以设置一个无符号整形值到他自己到一个我们创建的oid数组里边。或者你可以使用以下函数调用，我们将记住第一个，成为很好的更好和访问更多的oid的节点。
+   read_objid(".1.3.6.1.2.1.1.1.0", anOID, &anOID_len);
+   
+   #if OTHER_METHODS
+   get_node("sysDescr.0", anOID, &anOID_len);
+   read_objid("system.sysDescr.0", anOID, &anOID_len);
+   #endif
+   
+So we add this oid, with a NULL value to the PDU using the following statement: (all oids should be paired with a NULL value for outgoing requests for information. For an SNMP-SET pdu, we'd put in the value we wanted to set the oid to).
+我们添加一个oid，以一个空值声明。（全部的oid应该给发出信息的请求一一赋值为空，设置一个pdu，我们要给想设置的oid一个值得）
+   snmp_add_null_var(pdu, anOID, anOID_len);
+   
 
 
 
