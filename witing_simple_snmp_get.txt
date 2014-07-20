@@ -169,6 +169,87 @@ So, let's fill it with our requested oid. Let's get the system.sysDescr.0 variab
 So we add this oid, with a NULL value to the PDU using the following statement: (all oids should be paired with a NULL value for outgoing requests for information. For an SNMP-SET pdu, we'd put in the value we wanted to set the oid to).
 我们添加一个oid，以一个空值声明。（全部的oid应该给发出信息的请求一一赋值为空，设置一个pdu，我们要给想设置的oid一个值得）
    snmp_add_null_var(pdu, anOID, anOID_len);
+
+Finally, we can send out the request using the session pointer and the pdu and we get back a status and the response, which is stored in the newly malloced response pdu pointer.
+最后，我们要使用sesseion指针、pdu发送请求和接受后续的响应状态，函数会将响应状态存储到一个新申请的空间并返回他的地址指针。
+   /*
+    * Send the Request out.
+    */
+   status = snmp_synch_response(ss, pdu, &response);
+
+Now we can examine the information, assuming our request was fulfilled properly. If not, we'll print the error that caused the problem:
+现在我们可以检查信息，承担我们的请求，将适当全部填充，如果不是，将输出发生问题的错误。
+   /*
+    * Process the response.
+    */
+   if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) {
+     /*
+      * SUCCESS: Print the result variables
+      */
+   
+Lets print the pdu's variable to the terminal using the print_variable routine:
+让我们使用打印流程输出pdu的值到标准终端：
+     for(vars = response->variables; vars; vars = vars->next_variable)
+       print_variable(vars->name, vars->name_length, vars);
+
+Then, for kicks, lets get the information and manipulate it ourselves (checking to make sure its the type we're expecting (a string) first):
+然后，让我们获取并操作自己我们自己的信息。（检查确信第一个是我们期望的字符串属性）
+     /* manipulate the information ourselves */
+     for(vars = response->variables; vars; vars = vars->next_variable) {
+       int count=1;
+       if (vars->type == ASN_OCTET_STR) {
+         char *sp = malloc(1 + vars->val_len);
+         memcpy(sp, vars->val.string, vars->val_len);
+         sp[vars->val_len] = '\0';
+         printf("value #%d is a string: %s\n", count++, sp);
+         free(sp);
+       }
+       else
+         printf("value #%d is NOT a string! Ack!\n", count++);
+     }
+
+Finally, print a description of the error in case there was one:
+最后打印描述错误信息。
+   } else {
+     /*
+      * FAILURE: print what went wrong!
+      */
+    
+     if (status == STAT_SUCCESS)
+       fprintf(stderr, "Error in packet\nReason: %s\n",
+               snmp_errstring(response->errstat));
+     else
+       snmp_sess_perror("snmpget", ss);
+    
+   }
+
+Last, but not least, free the response, as it is now our job to do so. Exit cleanly by calling snmp_close() as well:
+结尾，但不是最后的，释放response，他现在还承担这我们的任务。调用snmp_close清理连接。
+   /*
+    * Clean up:
+    *  1) free the response.
+    *  2) close the session.
+    */
+   if (response)
+     snmp_free_pdu(response);
+   snmp_close(ss);
+    
+   /* windows32 specific cleanup (is a noop on unix) */
+   SOCK_CLEANUP;
+   
+ } /* main() */
+   
+
+       
+
+       
+
+       
+
+
+   
+
+
    
 
 
