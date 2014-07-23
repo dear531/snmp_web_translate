@@ -1,0 +1,158 @@
+snmptranslate
+Jump to: navigation, search
+
+The SNMP protocol tends to work with numeric OIDs and raw values. One of the main roles of the MIB files is to convert these into more
+meaningful textual names and sensibly formatted values.
+snmp协议监控工作数字oid和裸数据，将众多mib文件任务转换到更多有意义的文本名字，并且显示的格式化输出值。
+
+While most of the Net-SNMP command-line applications can control how the results of an SNMP query are displayed, there is one tool
+(snmptranslate) which can be used standalone, simply displays information drawn from the MIB files themselves.
+当很多net－snmp命令行应用将请求转成并显示出来，那些其中的一个工具就是snmptranslate，他是独立工作的，简单的从mib库文件显示他们的信息。
+See TUT:Using and loading MIBS. 
+
+Contents
+
+    1 OID Conversion
+    2 Specifying a MIB object
+    3 Further Information
+
+ OID Conversion
+oid转换
+
+In its simplest form, snmptranslate takes a numeric OID and displays the corresponding textual MIB name:
+最简单的，将一个oid数字转换成成相关的文本mib名字并显示出来：
+
+     % snmptranslate .1.3.6.1.2.1.1.3.0
+     SNMPv2-MIB::sysUpTime.0
+
+It can also perform the reverse translation, taking the textual MIB name and displaying the numeric OID. This uses the -On flag:
+这个同样执行一个相反的转换，取得一个文本mib名字，并并现他的oid数字，这里要使用-On标志。
+
+     % snmptranslate -On SNMPv2-MIB::sysUpTime.0
+     .1.3.6.1.2.1.1.3.0
+
+There are several other ways of displaying an OID, which are described in TUT:Customized_Output_Formats. One of these is to show the full list of MIB subidentifier names, using the -Of flag:
+还有几个其他的显示oid的方式，那些描述在Customized_Output_Formats里。其中之一是显示mib的全部子id的名字，使用-Of标志。
+
+     % snmptranslate -Of SNMPv2-MIB::sysUpTime.0
+     .iso.org.dod.internet.mib-2.system.sysUpTime.0
+
+Note that these flags determine how the OID should be displayed, regardless of how it was originally specified:
+注意，那些标志决定了oid应该怎样显示，无论原来指定的是怎样指定的。
+
+ % snmptranslate .iso.3.6.1.private.enterprises.2021.2.1.prNames.0
+ NET-SNMP-MIB::prNames.0
+ % snmptranslate -On .iso.3.6.1.private.enterprises.2021.2.1.prNames.0
+ .1.3.6.1.4.1.2021.2.1.2.0
+ % snmptranslate -Of .iso.3.6.1.private.enterprises.2021.2.1.prNames.0
+ .iso.org.dod.internet.private.enterprises.ucdavis.procTable.prEntry.prNames.0
+
+
+Specifying a MIB object
+指定一个mib对象
+
+The examples above identified a particular object, either by providing the full list of MIB subidentifiers (numeric, textual or a mixture), or by specifying the relevant MIB module containing the desired MIB object. However MIB objects are guaranteed to be unique within IETF standard MIBs (and are rarely duplicated across vendor-supplied MIBs either). So it would usually be sufficient to simply give the bare MIB object name, with no further qualifications. Snmptranslate uses the -IR flag to do this "random-access" lookup:
+这个例子在上文的确定一个特别的对象，被指定的子mib库列表当中任何一种（数字的，文本的或是混合的），或指定明确的mib内容描述的对象。无论怎样mib对象都保证mib的标准是独一无二的。（很少穿过mibs提供的标准重新)。这样他将没有进一步的限定的，充分提供一个简单螺项目名称。
+snmptranslate 使用 -IR标志作随机的查找访问。
+
+   % snmptranslate sysUpTime.0
+   Invalid object identifier: sysUpTime.0
+   % snmptranslate -IR sysUpTime.0
+   SNMPv2-MIB::sysUpTime.0
+
+(The other commands do this by default - only snmptranslate needs it to be explicitly turned on).
+其他的命令以默认的方式运行，只有snmptraslate需要显式的开启。
+
+It's even possible to provide a regex pattern, and have snmptranslate (or the other command-line tools) do a "best-match" search to find the appropriate MIB object. This uses the -Ib flag:
+他的事件能够指定一个正则表达式的样式，而且snmptranslate（活其他的命令行工具，这里指所有的snmpcmd）有一个最终匹配搜索合适的mib对象，使用-Ib选项。
+另外补充一个通过实验得出的结论：使用双引号作为正则表达式的边界，也是可以的，不过需要理论做支撑，没有找到任何证据证明可以所有的情况下双引号都是正确的用法。
+
+   % snmptranslate -Ib 'sys.*ime'
+   system.sysUpTime
+
+However these approaches do run the risk (however slight) of selecting the wrong MIB object. It's safest to use one of the earlier forms.
+无论怎样这些处理是选择错错误mib对象的运行风险（哪怕是微小的），使用最原始的匹配是最安全的。
+
+To get a list of all the nodes that match a given pattern, use the -TB flag:
+取得所有得到匹配格式的节点列表，使用-TB选项：
+
+   % snmptranslate -TB 'sys.*ime'
+   SNMPv2-MIB::sysORUpTime
+   SNMPv2-MIB::sysUpTime
+   HOST-RESOURCES-MIB::hrSystemUptime
+
+Further Information
+更多的信息
+
+To get extended information about a particular MIB node, use the -Td flag to display the full description from the MIB file:
+获得详细的mib节点的扩展信息，使用-Tb选项，从mib文件当中显示全部描述。
+
+  % snmptranslate -On -Td SNMPv2-MIB::sysUpTime
+  .1.3.6.1.2.1.1.3
+  sysUpTime OBJECT-TYPE
+    -- FROM       SNMPv2-MIB, RFC1213-MIB
+    SYNTAX        TimeTicks
+    MAX-ACCESS    read-only
+    STATUS        current
+    DESCRIPTION   "The time (in hundredths of a second) since the network
+              management portion of the system was last re-initialized."
+  ::= { iso(1) org(3) dod(6) internet(1) mgmt(2) mib-2(1) system(1) 3 }
+
+This can be combined with the other flags described earlier:
+这个可以组合起来作原始描述：
+
+  % snmptranslate -On -Td -IR sysUpTime
+  % snmptranslate -On -Td -Ib 'sys.*ime'
+
+to give the same results.
+取得相同的结果：
+
+Finally, it's possible to display a formatted diagram of a selected subset of the MIB tree, using the -Tp flag:
+最后，他可以显示选择mib树的子集格式，使用-Tp选项：
+
+   % snmptranslate -Tp -IR system
+   +--system(1)
+      |
+      +-- -R-- String    sysDescr(1)
+      |        Textual Convention: DisplayString
+      +-- -R-- ObjID     sysObjectID(2)
+      +-- -R-- TimeTicks sysUpTime(3)
+      +-- -RW- String    sysContact(4)
+      |        Textual Convention: DisplayString
+      +-- -RW- String    sysName(5)
+      |        Textual Convention: DisplayString
+      +-- -RW- String    sysLocation(6)
+      |        Textual Convention: DisplayString
+      +-- -R-- Integer   sysServices(7)
+      +-- -R-- TimeTicks sysORLastChange(8)
+      |        Textual Convention: TimeStamp
+      |
+      +--sysORTable(9)
+         |
+         +--sysOREntry(1)
+            |
+            +-- ---- Integer   sysORIndex(1)
+            +-- -R-- ObjID     sysORID(2)
+            +-- -R-- String    sysORDescr(3)
+            |        Textual Convention: DisplayString
+            +-- -R-- TimeTicks sysORUpTime(4)
+                     Textual Convention: TimeStamp
+
+This shows the accessibility (read-only, or read-write), syntax, name and subidentifier of each MIB object within the specified subtree, together with the internal structure of those MIB objects.
+
+Running snmptranslate -Tp without an OID argument will display this information for the known MIB tree in its entirety. This is left as an exercise for the student!
+
+这是显示每一个可访问的（只读或读写），语法，名字的mib对象内部指定的子树的子id，和那些mib对象内部的结构体是一起的。
+运行snmptranslate -Tp没有一个已知的mib全部变量的信息显示，这样只是为了更好的为学习执行过程。
+
+总结：
+输出样式：
+null	输出名字
+-On	输出数字
+-Of	输出全部名字
+输入：
+-IR	输入简化
+-Ib	输入正则表达式（单引号和双引号表达式边界）
+输出数量：
+-TB	输出全部匹配（和正则表达式搭配突显效果）
+-Tp	输出图形树
