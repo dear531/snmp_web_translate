@@ -1,0 +1,105 @@
+snmpget
+
+The GET request is one of the basic operations of the SNMP protocol, retrieving the information associated with the specified OID from the target agent. The snmpget application implements this protocol operation.
+snmpget是获得snmp协议当中基本操作当中的一个请求，他从目标agent取得指定的相关联的oid的信息。
+
+Contents
+
+    1 Basic Example
+    2 SNMP Versions and Administration
+    3 Failed Requests
+        3.1 Timeouts
+
+
+ Basic Example
+
+There are three main elements to such a request - where to retrieve this information from, the administrive information associated with the request, and what information is actually required:
+这是四个主要四个发送请求的成员，哪个取得信息的请求，从管理信息关联的请求，这是个真实请求：
+
+ % snmpget -v 2c -c demopublic test.net-snmp.org SNMPv2-MIB::sysUpTime.0
+ SNMPv2-MIB::sysUpTime.0 = Timeticks: (586731977) 67 days, 21:48:39.77
+
+
+In this example, test.net-snmp.org is the host name of the agent to query, using version 2 of the SNMP protocol, and the community string "demopublic". The OID being requested is sysUpTime.0 from the MIB module SNMPv2-MIB.
+
+The same basic command can also be used to retrieve a single element from within a table:
+
+ % snmpget -v 2c -c demopublic test.net-snmp.org SNMPv2-MIB::sysORDescr.1
+ SNMPv2-MIB::sysORDescr.1 = STRING: The Mib module for SNMPv2 entities
+
+
+The snmptranslate tutorial described several ways to specify an OID, and most of that discussion applies here too (as well as most of the other Net-SNMP command-line tools). The one significant difference is that snmpget (and most of the other tools) will apply "random-lookup" by default, so it is not strictly necessary to specify the name of the MIB. The two commands above could equally well be given as:
+
+ % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime.0
+ SNMPv2-MIB::sysUpTime.0 = Timeticks: (586731977) 67 days, 21:48:39.77
+
+ % snmpget -v 2c -c demopublic test.net-snmp.org sysORDescr.1
+ SNMPv2-MIB::sysORDescr.1 = STRING: The Mib module for SNMPv2 entities
+
+and this form will be used throughout the rest of these tutorials.
+
+Similarly, the options discussed in the Customized Output Formats tutorial can be used to control how the results should be displayed.
+SNMP Versions and Administration
+
+Both the original SNMPv1 and the later SNMPv2c use the clear-text "community string" as a de-facto password, to indicate whether a particular request should be authorised or not. The SNMPv1 equivalent of the first example would be almost identical:
+
+ % snmpget -v 1 -c demopublic test.net-snmp.org sysUpTime.0
+ SNMPv2-MIB::sysUpTime.0 = Timeticks: (586731977) 67 days, 21:48:39.77
+
+SNMPv3 uses a significantly different authentication mechanism, typically based around usernames and passwords, and allows both proper validation of SNMP requests, and even encryption of the traffic between the management client and the SNMP agent. See the SNMPv3 Options tutorial for details.
+
+The default version used will depend on how the software was configured when it was first compiled. Typically, the Net-SNMP suite will probably use SNMPv3 by default, but it is safest to always specify the version explicitly.
+Failed Requests
+
+The examples above show the successful retrieval of information from the target system. But what about requests that are not successful? How does SNMP handle failed requests?
+
+A common mistake when using the snmpget command is to forget the index (or "instance subidentifier") of the data being requested. This is less likely when retrieving a value from within a table, where it is natural to include the index as part of the OID. But for scalar objects, there is only one value, so it doesn't seem necessary to specify an index - surely the MIB object name alone should be sufficient?
+
+However SNMP is consistent in requiring an instance for all MIB objects - even scalar objects. In this case, the instance subidentifier is always a simple .0 (zero), as shown in the first example above.
+
+Omitting this results in an error:
+
+   % snmpget -v 1 -c demopublic test.net-snmp.org sysUpTime
+   Error in packet
+   Reason: (noSuchName) There is no such variable name in this MIB.
+   This name doesn't exist: sysUpTime
+
+Note that SNMPv2c gives a slightly more informative message:
+
+   % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime
+   SNMPv2-MIB::sysUpTime = No Such Instance currently exists
+
+The other likely cause of failure is that the agent does not support the requested MIB object at all. With SNMPv1, the error is exactly the same ("noSuchName"). SNMPv2c uses a slightly different indication of this situation:
+
+   % snmpget -v 2c -c demopublic test.net-snmp.org .1.3.6.1.2.1.1.99.0
+   SNMPv2-MIB::system.99.0 = No Such Object available on this agent at this OID
+
+SNMPv3 reports problems in the same way as SNMPv2c. 
+
+ Timeouts
+
+Another possible type of failure is that the request may timeout without returning any information at all. Assuming that the remote system is actually running an SNMP agent, the most likely cause of this would be the access control settings of the remote agent. See the FAQ entries Why doesn't the agent respond? and How do I configure access control? for further details.
+Multiple Values
+
+All the examples so far have worked with a single value. But snmpget can also retrieve several MIB values in a single request:
+
+   % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime.0 sysLocation.0
+   SNMPv2-MIB::sysUpTime.0 = Timeticks: (586903243) 67 days, 22:17:12.43
+   SNMPv2-MIB::sysLocation.0 = UCDavis
+
+This works in the same way for all versions SNMP. The difference between SNMPv1 and the later versions becomes apparent when one of the OIDs being requested is not valid. SNMPv2c (and SNMPv3) will display what information they can:
+
+   % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime.0 sysLocation   # No instance .0
+   SNMPv2-MIB::sysUpTime.0 = Timeticks: (586903243) 67 days, 22:17:12.43
+   SNMPv2-MIB::sysLocation = No Such Instance currently exists
+
+while the equivalent SNMPv1 request will simply fail:
+
+   % snmpget -Cf -v 1 -c demopublic test.net-snmp.org sysUpTime.0 sysLocation
+   Error in packet
+   Reason: (noSuchName) There is no such variable name in this MIB.
+   This name doesn't exist: sysLocation
+
+(Note that the -Cf flag is needed to prevent snmpget from automatically correcting this problem, and retrying the request - thus defeating the point of this example!) 
+
+
