@@ -2,6 +2,7 @@ snmpgetnext
 Jump to: navigation, search
 
 The other main SNMP operation for retrieving information is the GETNEXT request - a "fuzzy-matching" version of GET, and is implemented by the snmpgetnext tool.
+其他主要的snmp操作，为了获取getnext下一个请求的信息－－一个模糊匹配版本get的版本，使用snmpgetnext工具实现的。
 Contents
 
     1 Basic Example
@@ -12,9 +13,10 @@ Contents
     6 Unsupported MIB Objects
 
  Basic Example
+基本例子：
 
 With the snmpget command, the agent returns the value associated with the OID (or OIDs) specified in the original request. The snmpgetnext command is similar, but the agent returns the value associated with the next (valid) OID:
-
+用snmpget命令返回代理的值，关联oid指定远程的一个请求。这个snmpgetnext命令简单，但是代理返回的值关联有效的下一个oid：
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org SNMPv2-MIB::sysUpTime.0
    SNMPv2-MIB::sysContact.0 = Wes Hardaker wjhardaker@ucdavis.edu
 
@@ -24,11 +26,14 @@ With the snmpget command, the agent returns the value associated with the OID (o
 
 
 At first sight, this might seem an odd thing to do, but it is actually extremely useful, and GETNEXT is probably more widely used than GET.
+这个现象，看上去像是做了一个奇怪的事情，但这事实上是非常有用的，而且getnext很可能广泛的使用get。
 
 Note that most of the contents of the snmpget tutorial page apply to snmpgetnext as well. This tutorial will concentrate on the differences that are specific to the GETNEXT operation.
 OID Completion
+注意大多的snmp教程页很多的snmpgetnext内容都是很好的。这个教程将将集中另外特殊的getnext操作。
 
 One way to use this request is by providing an incomplete OID - perhaps omitting the instance subidentifier, or giving an "internal" MIB object. The agent will determine the next complete instance, and return that OID together with the corresponding value:
+一个使用假设不完整的oid的请求－－或许省略了子id的实例，或是给一个内部mib对象。代理将决定下一个完整的实例，然后返回同oid一起返回相关的值。
 
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysUpTime
    SNMPv2-MIB::sysUpTime.0 = Timeticks: (586978184) 67 days, 22:29:41.84
@@ -41,19 +46,24 @@ One way to use this request is by providing an incomplete OID - perhaps omitting
 
 
 This is particularly useful with MIB tables, where it may not be obvious what index values are valid. By issuing a GETNEXT request with the bare MIB name of one of the columns, the agent will return that entry from the first row of the table:
+这是个详细有用的mib表格，他可能不显著的索引有效值。以发行一个getnext请求一个裸mib名字的一个列，带来将从表格行返回一个入口。
 
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org tcpConnState
    TCP-MIB::tcpConnState.0.0.0.0.25.0.0.0.0.0 = INTEGER: 2
 
 It's also possible to provide a partial index, and have the agent complete it:
+他是同样能指定偏爱的索引，代理会补全他：
 
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org tcpConnState.127.0.0.1
    TCP-MIB::tcpConnState.127.0.0.1.631.0.0.0.0.0 = INTEGER: 2
 
 
 Walking a MIB
+一个mib库的步骤：
 
 Another way of using the GETNEXT operation is to issue a series of such requests, with each one using the OID from the previous result. This has the effect of "walking" through the MIB:
+其他的使用一个getnext操作一个发布一系列请求的方法，从上一个结使用每一个oi。这个作用WALKING完成mib：
+
 
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysUpTime.0
    SNMPv2-MIB::sysContact.0 = Wes Hardaker wjhardaker@ucdavis.edu
@@ -65,6 +75,7 @@ Another way of using the GETNEXT operation is to issue a series of such requests
    SNMPv2-MIB::sysLocation.0 = UCDavis
 
 Again, this technique is particularly useful with MIB tables, where it will walk through successive rows of the table:
+再有，有用的特殊的用在mib表格上一个技巧，他将成功取到表格的一整行。
 
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr
    SNMPv2-MIB::sysORDescr.1 = STRING: The MIB module for SNMPv2 entities
@@ -76,11 +87,12 @@ Again, this technique is particularly useful with MIB tables, where it will walk
    SNMPv2-MIB::sysORDescr.4 = STRING: The MIB module for managing IP and ICMP implementations
 
 Note that this works even if the indexes are not consecutive. However, the GETNEXT operation does not stop at the end of a table column (or even at the end of the whole table). If you issue a GETNEXT request on the last instance in a table column (or an index value greater than the last row of the table), then the agent will still return the next valid instance - typically the value of the next column from the first row of the table:
-
+注意即使索引不连续也仍将工作。无论如何，getnext操作不停止到了表格一列的结尾(或即便全部表格的结尾)。如果你想在表格列实例的结束发布一个getnext请求（或一个表格列索引值较大），那么代理仍将返回下一个有效的实例－－典型的表格第一行的下一列值。
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr.99
    SNMPv2-MIB::sysORUpTime.1 = Timeticks: (82) 0:00:00.82
 
 or possibly the first instance from a completely different area of the MIB altogether:
+或是可能是第一个实例是另一个mib全体。
 
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORUpTime.99
    IF-MIB::ifNumber.0 = INTEGER: 3
@@ -160,3 +172,13 @@ One other thing to be aware of is that it is the agent which determines what OID
    UCD-SNMP-MIB::memIndex.0 = INTEGER: 0
 
 The same holds if the agent is configured to only reveal a subset of the full MIB. Any objects that are outside the authorised view will be skipped, as if they had not been implemented at all. 
+
+总结：
+在使用snmpgetnext的地方，就只能使用本工具，不能使用snmpget替换，实验效果是，如果用snmpget替换snmpgetnext，会导致取不到正确的值。
+以下为实验演示：
+[root@zhangly command]# snmpgetnext -v 2c -c demopublic test.net-snmp.org sysname
+SNMPv2-MIB::sysName.0 = STRING: test.net-snmp.org
+[root@zhangly command]# snmpget -v 2c -c demopublic test.net-snmp.org sysname
+SNMPv2-MIB::sysName = No Such Instance currently exists at this OID			／／当使用了snmpget替换掉snmpget，得到的结果为失败。
+[root@zhangly command]# snmpgetnext -v 2c -c demopublic test.net-snmp.org sysname
+SNMPv2-MIB::sysName.0 = STRING: test.net-snmp.org
