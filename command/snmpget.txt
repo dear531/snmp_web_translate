@@ -21,14 +21,18 @@ There are three main elements to such a request - where to retrieve this informa
 
 
 In this example, test.net-snmp.org is the host name of the agent to query, using version 2 of the SNMP protocol, and the community string "demopublic". The OID being requested is sysUpTime.0 from the MIB module SNMPv2-MIB.
+这里例子，test.net-snmp.org代理求请求的主机名，使用的是snmp版本2，共同体字符串是demopublic，这个oid是个来自snmpv2－mib中systime.0。
 
 The same basic command can also be used to retrieve a single element from within a table:
+这个同样是个基本命令，也是在表格当中获得单一的元素的。
+
 
  % snmpget -v 2c -c demopublic test.net-snmp.org SNMPv2-MIB::sysORDescr.1
  SNMPv2-MIB::sysORDescr.1 = STRING: The Mib module for SNMPv2 entities
 
 
 The snmptranslate tutorial described several ways to specify an OID, and most of that discussion applies here too (as well as most of the other Net-SNMP command-line tools). The one significant difference is that snmpget (and most of the other tools) will apply "random-lookup" by default, so it is not strictly necessary to specify the name of the MIB. The two commands above could equally well be given as:
+snmptranslate教程描述了一些指定oid的方法，讨论的大多数的都要应用（像很多其他的net－snmp命令行工具一样）。一个重要差异是snmpget（而且大多其他的工具）将默认使用随机检查，这样他就不会严格的按需要指定一个mib库名字。这两个命令在等于于上文的请求：
 
  % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime.0
  SNMPv2-MIB::sysUpTime.0 = Timeticks: (586731977) 67 days, 21:48:39.77
@@ -37,27 +41,40 @@ The snmptranslate tutorial described several ways to specify an OID, and most of
  SNMPv2-MIB::sysORDescr.1 = STRING: The Mib module for SNMPv2 entities
 
 and this form will be used throughout the rest of these tutorials.
+这个是教程全部的使用方法的剩余部分。
 
 Similarly, the options discussed in the Customized Output Formats tutorial can be used to control how the results should be displayed.
+简单讨论下，应该如何使用自定义选项格式转换和显示一个结果。
+
 SNMP Versions and Administration
+版本和管理
+
 
 Both the original SNMPv1 and the later SNMPv2c use the clear-text "community string" as a de-facto password, to indicate whether a particular request should be authorised or not. The SNMPv1 equivalent of the first example would be almost identical:
+snmpv1和稍后的snmpv2两个版本的共同体字符串使用明文的密码传输，无论两个中的哪个一个指定了一详细的请求，都应该经过授权或是不授权。snmpv1差不多等价于第一个例子：
 
  % snmpget -v 1 -c demopublic test.net-snmp.org sysUpTime.0
  SNMPv2-MIB::sysUpTime.0 = Timeticks: (586731977) 67 days, 21:48:39.77
 
 SNMPv3 uses a significantly different authentication mechanism, typically based around usernames and passwords, and allows both proper validation of SNMP requests, and even encryption of the traffic between the management client and the SNMP agent. See the SNMPv3 Options tutorial for details.
+snmpv3使用的另外不同的证书技巧，典型的代表是用户名和密码，即使在管理客户端和snmp代理之间加密，这两者的请求完全需要确认。查看snmpv3教程的详细内容。
 
 The default version used will depend on how the software was configured when it was first compiled. Typically, the Net-SNMP suite will probably use SNMPv3 by default, but it is safest to always specify the version explicitly.
 Failed Requests
+当首次编译时，使用软件配置默认的版本。典型的，net－snmp可能将跟随snmpv3，但是他是永远是最安全的指定明确版本。
 
 The examples above show the successful retrieval of information from the target system. But what about requests that are not successful? How does SNMP handle failed requests?
+上文的这个例子成功的获取了目标系统的信息，但是如果请求不成功那？怎么处理失败的请求。
 
 A common mistake when using the snmpget command is to forget the index (or "instance subidentifier") of the data being requested. This is less likely when retrieving a value from within a table, where it is natural to include the index as part of the OID. But for scalar objects, there is only one value, so it doesn't seem necessary to specify an index - surely the MIB object name alone should be sufficient?
+忘记了数据的索引（或是子id的实例）的一个snmpget请求，被错误的使用了。获取表格当中的一个值可能性较少，他自然包含oid的索引部分，但是标量的对象，只有一个值，那么他不需要被指定的索引查看－－当然这个mib对象有充分的理由被命名成单独一个么？
 
 However SNMP is consistent in requiring an instance for all MIB objects - even scalar objects. In this case, the instance subidentifier is always a simple .0 (zero), as shown in the first example above.
+无论如何snmp一直坚持为全部的mib对象实例请求。然而对象是分等级的。既然如此，子id实例就一直简单的用.0表示。想上文当中的展示的第一个例子。
 
 Omitting this results in an error:
+这是一个省略了错误的结果。
+
 
    % snmpget -v 1 -c demopublic test.net-snmp.org sysUpTime
    Error in packet
@@ -65,35 +82,42 @@ Omitting this results in an error:
    This name doesn't exist: sysUpTime
 
 Note that SNMPv2c gives a slightly more informative message:
+注意，这是snmpv2c给出的少数的信息：
 
    % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime
    SNMPv2-MIB::sysUpTime = No Such Instance currently exists
 
 The other likely cause of failure is that the agent does not support the requested MIB object at all. With SNMPv1, the error is exactly the same ("noSuchName"). SNMPv2c uses a slightly different indication of this situation:
-
+这是其他的可能的代理不支持的错误全部的mib对象请求。使用snmpv1，这个错误应该刚好是没有找到名字的错误。使用snmpv2c是一个轻量级的另一种情况。
    % snmpget -v 2c -c demopublic test.net-snmp.org .1.3.6.1.2.1.1.99.0
    SNMPv2-MIB::system.99.0 = No Such Object available on this agent at this OID
 
 SNMPv3 reports problems in the same way as SNMPv2c. 
+snmpv3 记录错误同snmpv2c一样的方法。
 
  Timeouts
 
 Another possible type of failure is that the request may timeout without returning any information at all. Assuming that the remote system is actually running an SNMP agent, the most likely cause of this would be the access control settings of the remote agent. See the FAQ entries Why doesn't the agent respond? and How do I configure access control? for further details.
-Multiple Values
+另一种可能的请求失败的属性可能是没有任何信息返回而超时。假设一个远程系统运行的是一个snmp的代理，很可能远程代理的设置访问控制发生。查看FAQ实体，为什么代理不响应？我应该如何控制访问？进一步了解详情。
 
+Multiple Values
+多值
 All the examples so far have worked with a single value. But snmpget can also retrieve several MIB values in a single request:
+全部例子都是远程工作操作一个值得。但是snmpget就好像如同获取了很多mib值的一个请求：
 
    % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime.0 sysLocation.0
    SNMPv2-MIB::sysUpTime.0 = Timeticks: (586903243) 67 days, 22:17:12.43
    SNMPv2-MIB::sysLocation.0 = UCDavis
 
 This works in the same way for all versions SNMP. The difference between SNMPv1 and the later versions becomes apparent when one of the OIDs being requested is not valid. SNMPv2c (and SNMPv3) will display what information they can:
+这是所有snmp版本工作相同的情况。另一个snmpv1和后来的版本成为oid请求一个无效的是表面上的。snmpv2c（和snmpv3）将显示他们的信息是怎样的：
 
    % snmpget -v 2c -c demopublic test.net-snmp.org sysUpTime.0 sysLocation   # No instance .0
    SNMPv2-MIB::sysUpTime.0 = Timeticks: (586903243) 67 days, 22:17:12.43
    SNMPv2-MIB::sysLocation = No Such Instance currently exists
 
 while the equivalent SNMPv1 request will simply fail:
+这个等价于snmpv1的简单失败请求：
 
    % snmpget -Cf -v 1 -c demopublic test.net-snmp.org sysUpTime.0 sysLocation
    Error in packet
@@ -101,5 +125,6 @@ while the equivalent SNMPv1 request will simply fail:
    This name doesn't exist: sysLocation
 
 (Note that the -Cf flag is needed to prevent snmpget from automatically correcting this problem, and retrying the request - thus defeating the point of this example!) 
+注意：这个-Cf选项需要阻止snmpget 自动的修正错误和重新请求－－因而拆掉了例子的指针。
 
 
