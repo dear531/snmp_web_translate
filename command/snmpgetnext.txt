@@ -98,17 +98,20 @@ or possibly the first instance from a completely different area of the MIB altog
    IF-MIB::ifNumber.0 = INTEGER: 3
 
 It's up to the client application (or person) making the request to recognise when this happens, and not to continue walking the MIB (unless that is explicitly what is required). The snmpwalk command has been designed to do precisely this task.
+他是一直到客户端应用制造了请求碰巧识别，也不继续进行mib（除非这个明确是个什么请求），snmpwalk命令有计划精确的分配任务。
 
 
 Multiple Values
+多值
 
 Just as with snmpget, it's also possible to run a single GETNEXT request with several OIDs, and it will retrieve the next valid instance for each of these:
-
+用snmpget也刚好能运行一个getnext请求，在多个oids里，而且他将陆续取得这些实例当中每一个。
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysUpTime system
    SNMPv2-MIB::sysUpTime.0 = Timeticks: (586978184) 67 days, 22:29:41.84
    SNMPv2-MIB::sysDescr.0 = HP-UX net-snmp B.10.20 A 9000/715
 
 Once again, this is particularly useful with columns of a table, as it can be used to walk through the table one row at a time:
+再有，对于表格的列详情也是有用的，像使用walk彻底同时取得表格所有一行的信息一样。
 
    % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr sysORID sysORUpTime
    SNMPv2-MIB::sysORDescr.1  = STRING: The Mib module for SNMPv2 entities
@@ -122,6 +125,8 @@ Once again, this is particularly useful with columns of a table, as it can be us
       etc
 
 This is basically the purpose of the snmptable command.
+这个基本上是snmp表格的命令用途。
+
 
 One thing to be aware of is that there may potentially be "holes" in the table, where a particular column does not have a value in every row. The GETNEXT request will step over these missing values, and return the value of that column from the next row where it does exist. The next iteration would need to adjust to this if the walk is to keep stepping through a row at a time:
 
