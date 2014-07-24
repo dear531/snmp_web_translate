@@ -1,0 +1,162 @@
+snmpgetnext
+Jump to: navigation, search
+
+The other main SNMP operation for retrieving information is the GETNEXT request - a "fuzzy-matching" version of GET, and is implemented by the snmpgetnext tool.
+Contents
+
+    1 Basic Example
+    2 OID Completion
+    3 Walking a MIB
+    4 Multiple Values
+    5 Failed Requests
+    6 Unsupported MIB Objects
+
+ Basic Example
+
+With the snmpget command, the agent returns the value associated with the OID (or OIDs) specified in the original request. The snmpgetnext command is similar, but the agent returns the value associated with the next (valid) OID:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org SNMPv2-MIB::sysUpTime.0
+   SNMPv2-MIB::sysContact.0 = Wes Hardaker wjhardaker@ucdavis.edu
+
+   % snmptranslate -On SNMPv2-MIB::sysUpTime.0 SNMPv2-MIB::sysContact.0
+   .1.3.6.1.2.1.1.3.0
+   .1.3.6.1.2.1.1.4.0
+
+
+At first sight, this might seem an odd thing to do, but it is actually extremely useful, and GETNEXT is probably more widely used than GET.
+
+Note that most of the contents of the snmpget tutorial page apply to snmpgetnext as well. This tutorial will concentrate on the differences that are specific to the GETNEXT operation.
+OID Completion
+
+One way to use this request is by providing an incomplete OID - perhaps omitting the instance subidentifier, or giving an "internal" MIB object. The agent will determine the next complete instance, and return that OID together with the corresponding value:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysUpTime
+   SNMPv2-MIB::sysUpTime.0 = Timeticks: (586978184) 67 days, 22:29:41.84
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org system
+   SNMPv2-MIB::sysDescr.0 = HP-UX net-snmp B.10.20 A 9000/715
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org .1.3.6
+   SNMPv2-MIB::sysDescr.0 = HP-UX net-snmp B.10.20 A 9000/715
+
+
+This is particularly useful with MIB tables, where it may not be obvious what index values are valid. By issuing a GETNEXT request with the bare MIB name of one of the columns, the agent will return that entry from the first row of the table:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org tcpConnState
+   TCP-MIB::tcpConnState.0.0.0.0.25.0.0.0.0.0 = INTEGER: 2
+
+It's also possible to provide a partial index, and have the agent complete it:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org tcpConnState.127.0.0.1
+   TCP-MIB::tcpConnState.127.0.0.1.631.0.0.0.0.0 = INTEGER: 2
+
+
+Walking a MIB
+
+Another way of using the GETNEXT operation is to issue a series of such requests, with each one using the OID from the previous result. This has the effect of "walking" through the MIB:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysUpTime.0
+   SNMPv2-MIB::sysContact.0 = Wes Hardaker wjhardaker@ucdavis.edu
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysContact.0
+   SNMPv2-MIB::sysName.0 = net-snmp
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysName.0
+   SNMPv2-MIB::sysLocation.0 = UCDavis
+
+Again, this technique is particularly useful with MIB tables, where it will walk through successive rows of the table:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr
+   SNMPv2-MIB::sysORDescr.1 = STRING: The MIB module for SNMPv2 entities
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr.1
+   SNMPv2-MIB::sysORDescr.2 = STRING: The MIB module to describe generic objects for network interface sub-layers
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr.2
+   SNMPv2-MIB::sysORDescr.4 = STRING: The MIB module for managing IP and ICMP implementations
+
+Note that this works even if the indexes are not consecutive. However, the GETNEXT operation does not stop at the end of a table column (or even at the end of the whole table). If you issue a GETNEXT request on the last instance in a table column (or an index value greater than the last row of the table), then the agent will still return the next valid instance - typically the value of the next column from the first row of the table:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr.99
+   SNMPv2-MIB::sysORUpTime.1 = Timeticks: (82) 0:00:00.82
+
+or possibly the first instance from a completely different area of the MIB altogether:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORUpTime.99
+   IF-MIB::ifNumber.0 = INTEGER: 3
+
+It's up to the client application (or person) making the request to recognise when this happens, and not to continue walking the MIB (unless that is explicitly what is required). The snmpwalk command has been designed to do precisely this task.
+
+
+Multiple Values
+
+Just as with snmpget, it's also possible to run a single GETNEXT request with several OIDs, and it will retrieve the next valid instance for each of these:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysUpTime system
+   SNMPv2-MIB::sysUpTime.0 = Timeticks: (586978184) 67 days, 22:29:41.84
+   SNMPv2-MIB::sysDescr.0 = HP-UX net-snmp B.10.20 A 9000/715
+
+Once again, this is particularly useful with columns of a table, as it can be used to walk through the table one row at a time:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr sysORID sysORUpTime
+   SNMPv2-MIB::sysORDescr.1  = STRING: The Mib module for SNMPv2 entities
+   SNMPv2-MIB::sysORID.1     = SNMPv2-MIB::snmpMIB 
+   SNMPv2-MIB::sysORUpTime.1 = Timeticks: (82) 0:00:00.82
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr.1 sysORID.1 sysORUpTime.1
+   SNMPv2-MIB::sysORDescr.2  = STRING: The MIB module to describe generic objects for network interface sub-layers
+   SNMPv2-MIB::sysORID.2     = IF-MIB::ifMIB
+   SNMPv2-MIB::sysORUpTime.2 = Timeticks: (81) 0:00:00.81
+      etc
+
+This is basically the purpose of the snmptable command.
+
+One thing to be aware of is that there may potentially be "holes" in the table, where a particular column does not have a value in every row. The GETNEXT request will step over these missing values, and return the value of that column from the next row where it does exist. The next iteration would need to adjust to this if the walk is to keep stepping through a row at a time:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr.2 sysORID.2 sysORUpTime.2
+   SNMPv2-MIB::sysORDescr.5  = STRING: The MIB module for managing UDP implementations
+   SNMPv2-MIB::sysORID.4     = IP-MIB::ip
+   SNMPv2-MIB::sysORUpTime.4 = Timeticks: (83) 0:00:00.83
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org sysORDescr.4 sysORID.4 sysORUpTime.4
+   SNMPv2-MIB::sysORDescr.5  = STRING: The MIB module for managing UDP implementations
+   SNMPv2-MIB::sysORID.5     = UDP-MIB::udpMIB
+   SNMPv2-MIB::sysORUpTime.5 = Timeticks: (82) 0:00:00.82
+
+This is an artificial example, in that an SNMP agent would be very unlikely to omit this description string. But it serves to illustrate the basic idea.
+
+
+Failed Requests
+
+If a GETNEXT request is given the very last valid instance (or an OID later than this), then the agent needs to indicate that there are no further values to retrieve. With SNMPv1, this uses the same error as a GET request for a non-existant OID:
+
+   % snmpgetnext -v 1 -c demopublic test.net-snmp.org .2.0.9999
+   Error in packet.
+   Reason: (noSuchName) There is no such variable name in this MIB.
+   Failed object: joint-iso-ccitt.0.9999
+
+SNMPv2c and SNMPv3 appear similar, but use a different exception to indicate this situation:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org .2.0.9999
+   joint-iso-ccitt.0.9999 = No more variables left in this MIB View (It is past the end of the MIB tree)
+
+As with the GET requests, the difference between these versions really becomes apparent when one OID fails in a multi-OID GETNEXT request:
+
+   % snmpgetnext -Cf -v 1 -c demopublic test.net-snmp.org .2.0.9999 system
+   Error in packet.
+   Reason: (noSuchName) There is no such variable name in this MIB.
+   Failed object: joint-iso-ccitt.0.9999
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org .2.0.9999 system
+   joint-iso-ccitt.0.9999 = No more variables left in this MIB View (It is past the end of the MIB tree)
+   SNMPv2-MIB::sysDescr.0 = HP-UX net-snmp B.10.20 A 9000/715
+
+
+Unsupported MIB Objects
+
+One other thing to be aware of is that it is the agent which determines what OID should be returned, not the client application. If the agent does not happen to implement a particular MIB object (or group of objects) that the client knows about, then the agent will return the next OID that it does implement, even if this is not an entry that was actually required:
+
+   % snmpgetnext -v 2c -c demopublic test.net-snmp.org enterprises.hp
+   UCD-SNMP-MIB::memIndex.0 = INTEGER: 0
+
+The same holds if the agent is configured to only reveal a subset of the full MIB. Any objects that are outside the authorised view will be skipped, as if they had not been implemented at all. 
